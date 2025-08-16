@@ -1,8 +1,9 @@
 ---
 title: This is a test v2
-slug: test
 posted_on: 2025-01-01
 last_update: 2025-01-01
+abstract: >
+    Hey this is a test kdklsjk.
 ---
 
 This is content
