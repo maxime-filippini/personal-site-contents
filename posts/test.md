@@ -9,6 +9,9 @@ abstract: >
 
 This is content
 
+<my-button></my-button>
+<script src="../dist/button.js"></script>
+
 ## Hi
 
 JDHDJHFDS
