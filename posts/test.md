@@ -9,8 +9,8 @@ abstract: >
 
 This is content
 
-<my-button></my-button>
-<script src="../dist/button.js"></script>
+```custom elt="my-button" path="../dist/button.js"
+```
 
 ## Hi
 
