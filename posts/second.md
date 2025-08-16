@@ -11,9 +11,6 @@ abstract: >
 
 Hi!
 
-
-Some more text
-
-uuuuu
-
-github is a cool cms
+```python
+print("edited on github")
+```
