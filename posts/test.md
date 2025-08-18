@@ -4,12 +4,12 @@ posted_on: 2025-01-01
 last_update: 2025-01-01
 draft: true
 abstract: >
-    Hey this is a test kdklsjk.
+    Hey this is a test.
 ---
 
 This is content
 
-```custom elt="my-button" path="../dist/button.js"
+```custom elt="my-button" __path="/components/button.umd.cjs"
 ```
 
 ## Hi

@@ -1,11 +1,17 @@
 <svelte:options customElement="my-button" />
 
 <script lang="ts">
-  let { text = "Click me" }: { text?: string } = $props();
+  let count = $state(0);
 </script>
 
-<button class="custom-button">
-  {text}
+<button
+  class="custom-button"
+  onclick={() => {
+    count = count + 1;
+  }}
+>
+  Clicked {count}
+  {count < 2 ? "time" : "times"}
 </button>
 
 <style>
