@@ -2,7 +2,9 @@ name: Publish Content
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'preview/*'
     paths:
       - 'posts/**'
       - '*.md'
