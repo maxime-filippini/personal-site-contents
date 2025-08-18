@@ -29,6 +29,7 @@ jobs:
           PAYLOAD=$(cat <<EOF
           {
             "sha": "${{ steps.sha.outputs.sha }}",
+            "ref": "${{ github.ref }}",
             "repository": {
               "full_name": "${{ github.repository }}"
             },
