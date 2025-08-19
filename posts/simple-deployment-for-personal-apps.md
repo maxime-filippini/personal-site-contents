@@ -4,64 +4,135 @@ posted_on: 2025-08-20
 last_update: 2025-08-20
 draft: false
 abstract: >
-    Building personal apps is easier than ever, but sharing them safely is still fiddly. This post shows how to use Tailscale, a mesh VPN—to securely reach a local app from your phone or a small circle of people without public hosting, auth flows, or firewall wrangling. We set up a tailnet and DNS, build a tiny FastAPI + PydanticAI service that generates a fresh motivational quote every 30 minutes, and access it from anywhere. We wrap up with notes on containerizing the app with Docker for clean, repeatable runs.
+    Building personal apps is easier than ever, but sharing them safely is still fiddly. This post shows how to use Tailscale to securely reach a local app from your phone or a small circle of people without public hosting, auth flows, or firewall wrangling. I illustrate a use case by running a service on my laptop that generates a fresh motivational quote every 30 minutes, and access it from anywhere.
 ---
 
-I believe it's fair to say that it's never been this easy to build "personal web applications", i.e. applications where you and your loved ones are the primary user. With the advent of [Vibe coding](https://en.wikipedia.org/wiki/Vibe_coding) and  AI-powered coding agents like [Claude Code](https://www.anthropic.com/claude-code), [OpenCode](https://opencode.ai/) and [OpenAI Codex](https://openai.com/codex/), you can go from idea to a reasonably functional application much faster than could be possible even a couple of years ago.
 
-But accessing these small applications on your phone or sharing them to specific people can be a pain, since after all, having them run on your machine does not make them accessible outside of your local network. Until a few days ago, I believe the work necessary to share these apps would be to:
+In the age of AI, building applications for your own personal use has become easier than ever. For example, I could open [Claude Code](https://www.anthropic.com/claude-code) or [OpenCode](https://opencode.ai/) and whip up a (mostly) working prototype for a simple app in less than an hour. But how do we go from simple proof of concept to something that can actually be useful for ourselves? In most cases, making this leap involves first **securing the app**, and **deploying it** so it can be accessed from anywhere (e.g. our phone), but not by anyone!
 
-- Set up an authentication system to not allow access to non-logged-in users;
-- Set up an authorization list so only valid email addresses could access the app;
-- Deploy the application to the Internet.
-
-This is quite complicated and generally not for the faint of heart. Some providers will make you the promise to make this kind of process simple, but it will cost you some money, and that will often be on **per-app basis**!
-
-But it doesn't have to be that way! 
-
-In this post, we will explore how [Tailscale](https://tailscale.com/) can be used to share a simple application that generates a new motivational quote every 30 minutes.
-
-## What is Tailscale?
-
-Tailscale is a so-called "Mesh VPN". While most people have heard of VPNs, mostly through adverts for services like [NordVPN](https://nordvpn.com/) and [Surfshark](https://surfshark.com/), the "mesh" part is perhaps the one confusing bit about that name.
-
-A VPN routes all your Internet traffic to a server that then accesses websites and resources for you. The main use case for VPNs is to access geo-locked content (e.g. your home country's Netflix catalogue), but it can also be used to access resources on your home network while you're away (e.g. turn off your smart lights while at work).
+If the diagram below represents how our app is accessed, the security would be handled at the `Auth` step, and we would have to find a way to take the `Server` and deploy it to a cloud of our choice (or our own infrastructure but let's not go down this rabbit hole).
 
 ```mermaid
 flowchart LR
-    A[💻 Your laptop] e1@--> B[📟 VPN server]
-    C[📱 Your phone] e2@--> B
-    B e3@--> D[🌐 Website]
+    U[User]
+
+    subgraph Server
+        AU{Auth}
+        A[App]
+        R[/Resource/]
+
+        A e1@--> R
+        R e2@--> A
+        AU e3@--> A
+    end
+
+    U e4@-->|Request| AU
+    A e5@-->|Response| U
 
     e1@{ animate: true }
     e2@{ animate: true }
-    e3@{ animate: true } 
+    e3@{ animate: true }
+    e4@{ animate: true }
+    e5@{ animate: true }
 ```
 
-Instead of having a VPN tied to a given network, Tailscale allow your **devices** to discover each other, even when said devices are connected to different networks.
+Both of these steps are among the tallest hurdles novices have to cross to become proficient web developers.
 
+But what if we could somehow run these apps completely locally (thus foregoing a complex deployment process), **and** delegate security to the infrastructure layer? This diagram would look a little bit more like this:
 
 ```mermaid
-flowchart-elk LR
-    A[💻 Your laptop] e1@--- B[📟 Tailscale server]
-    C[📱 Your phone] e2@--- B
-    A e3@--> D[🌐 Website]
-    C e4@--> D
-    
-    A e5@-->|Encrypted| C
-    C e6@-->|Encrypted| A    
+flowchart LR
+    U[User]
+    AU{Infra layer}
+
+    A[App]
+    R[/Resource/]
+
+    A e1@--> R
+    R e2@--> A
+    AU e3@--> A
+
+
+    U e4@-->|Request| AU
+    A e5@-->|Response| U
 
     e1@{ animate: true }
     e2@{ animate: true }
-    e3@{ animate: false } 
-    e4@{ animate: false } 
-    e5@{ animate: true } 
-    e6@{ animate: true }  
+    e3@{ animate: true }
+    e4@{ animate: true }
+    e5@{ animate: true }
 ```
 
-Thanks to the Tailscale server, our devices can discover each other and access resources in an encrypted way, while requests to external resources and websites are performed as normal.
+(the `Infra layer` here is hiding a lot of complexity, but what matters is that we're not the ones implementing it)
 
-With this setup, you could have an app running on your laptop, away from your home network (but connected to the Internet), and still be able to access that app on your phone. You are not rooted to any particular network, just a list of devices, and the Tailscale server.
+In this post, we will explore how [Tailscale](https://tailscale.com/) can allow you to run a simple application that generates motivational quotes on your laptop, and make it accessible to your and your friends' devices, in a secure way, **with at most 15 minutes of setup**.
+
+## What is Tailscale?
+
+Tailscale is a "Mesh VPN" that connects your devices to each other without tying them down to a single network. Instead of connecting each device to a network, like traditional VPNs do, with Tailscale, your devices **are** the network, and the resources shared through Tailscale are those made available by these devices.
+
+```mermaid
+flowchart LR
+
+    subgraph "Traditional VPN"
+
+    A[💻 Your laptop]
+    C[📱 Your phone]
+    D[📺 Your TV]
+    E[📟 VPN server]
+    F[📂 Resources]
+
+    A e1@--> E 
+    E e2@--> F
+    C e3@--> E
+    D e4@--> E
+
+    e1@{ animate: true }
+    e2@{ animate: true }
+    e3@{ animate: true }
+    e4@{ animate: true }
+
+    end
+
+```
+
+```mermaid
+flowchart LR
+    subgraph "Tailscale"
+
+    AA[💻 Your laptop]
+    AAR[📂 Resources]
+
+    CC[📱 Your phone]
+    CCR[📂 Resources]
+
+    DD[📺 Your TV]
+    DDR[📂 Resources]
+
+
+    AA e1@<--> CC
+    AA e2@<--> DD
+    CC e3@<--> DD
+
+    e1@{ animate: true }
+    e2@{ animate: true }
+    e3@{ animate: true }
+    
+    AA e4@--> AAR
+    CC e5@--> CCR
+    DD e6@--> DDR
+
+    e4@{ animate: true }
+    e5@{ animate: true }
+    e6@{ animate: true }
+
+    end
+
+```
+
+But you may be wondering how that connection between devices can happen in the first place, since they may not have static IPs, and how can it be secured. This is the job of the **Tailscale Control Server**. For more information on the inner workings of Tailscale, please see this excellent [blog post](https://tailscale.com/blog/how-tailscale-works).
+
+This means that, as long as our Tailscale network includes these devices, we could have an app running on your laptop, away from our home network (but connected to the Internet), and still be able to access that app on a phone.
 
 Tailscale is an enterprise-ready solution, but has a very generous free plan, and cheap personal plans if you need more users on your network (see [Pricing page](https://tailscale.com/pricing)).
 
@@ -77,36 +148,39 @@ Once this is done, you can go to the [DNS tab](https://login.tailscale.com/admin
 
 ![](/static/assets/tailscale-dns.webp)
 
-In my case, this name is `follow-scylla.ts.net`. This means that to access a service running on my MacBook Pro, I will have to make requests to `http://mmbp.follow-scylla.ts.net:<PORT>`, where `<PORT>` is the port on which the service will be running.
+In my case, this name is `follow-scylla.ts.net`. This means that to access an application running on my laptop, I will have to make requests to `http://mmbp.follow-scylla.ts.net:<PORT>`, where `<PORT>` is the port on which the application will be running.
 
 To check that it all works, you can now launch a webserver on one machine and check that we can access it on our phone.
 
-This is a Python one-liner that spawns a webserver which serves a JSON data that says `Hello World!` at its root, on port 8000.
-
 ```bash
-python -c "import http.server; http.server.HTTPServer(('', 8000), type('', (http.server.BaseHTTPRequestHandler,), {'do_GET': lambda self: [self.send_response(200), self.send_header('Content-type', 'text/json'), self.end_headers(), self.wfile.write(b'Hello World!')]})).serve_forever()"
+python -m http.server 8000
 ```
 
 This is a local server that runs on our computer, and is therefore not accessible outside our local network. However, because we have Tailscale set up, we should be able to access it from any of our devices.
 
 ![](/static/assets/tailscale-phone-access.webp)
 
-**Success!** We now have an "app" that runs one machine that can be accessed on another that is not connected to the same network (note the "5G" on the above screenshot). This "app" is as secure as our tailnet, without requiring us to set up any form of authentication or authorization! Finally, we didn't have to worry about having to deploy our app on someone else's server (e.g. via a cloud provider), as that would have been overkill for a personal app.
+**Success!** We now have an ""app"" that runs on a machine and can be accessed by another that is not connected to the same network (note the "5G" on the above screenshot). This "app" is as secure as our tailnet, without requiring us to set up any form of authentication or authorization (if you worry about the level of security of the Tailscale control server, please refer to their [Security page](https://tailscale.com/security))! 
+
+Finally, we didn't have to worry about having to deploy our app on someone else's server (e.g. via a cloud provider), as that would have been overkill for a personal app.
+
+To illustrate how we can use Tailscale for something that resembles a very simple personal app, we are going to be building a simple web application that will generate motivational quotes every 30 minutes using AI. For this, we will use [FastAPI](https://fastapi.tiangolo.com/) and [PydanticAI](https://ai.pydantic.dev/). 
 
 ## Building the application
 
-Let's set up a simple web application that will call the OpenAI API to provide a fake motivational quote every 30 minutes. For this, we will use [FastAPI](https://fastapi.tiangolo.com/) and [PydanticAI](https://ai.pydantic.dev/).
+Our application will be made up of a single endpoint, `/motivate`, which will give the quote. The first request in any given 30-minute block will take longer, since a call to the OpenAI API will be made, but every request after that will return the cached response.
 
-> Note: We will use `uv` in this project as it is the canonical way to handle package and virtual environment management these days. For more information on it, please refer to the [official docs](https://docs.astral.sh/uv/).
+The implementation will be simple:
+
+- The function that will make the call to the API will accept a `timestamp` parameter, rounded at the closest 30-minute increment.
+- This function will be decorated with `@lru_cache`, which means it will only run once per timestamp.
+- When someone visits `localhost:8000/motivate`, our application will call this function with the current timestamp.
+
+First, we initialize a new project using [uv](https://docs.astral.sh/uv/) and add the required dependencies:
 
 ```console
 $ uv init motivation-ai
 Initialized project `motivation-ai` at `path/to/motivation-ai`
-```
-
-Our project initialized, we now add our dependencies.
-
-```console
 $ cd motivation-ai
 $ uv add 'fastapi[standard]' pydantic-ai
 Using Python 3.13.3 interpreter at: /opt/homebrew/opt/python@3.13/bin/python3.13
@@ -115,7 +189,7 @@ Prepared 57 packages in 25.50s
 Installed 108 packages in 259ms
 ```
 
-Before we go any further, let's make the simplest form of our application and check that it works.
+Before going any further, let's implement the simplest FastAPI app and check that it works using a health-check.
 
 ```python
 # motivation-ai/main.py 
@@ -130,7 +204,7 @@ def healthcheck() -> JSONResponse:
     return JSONResponse({"message": "OK"}, status_code=200)
 ```
 
-We then run the server using the FastAPI CLI:
+To run the server, we use the FastAPI CLI (`--host 0.0.0.0` means our application will be visible to our local network, and as such, by Tailscale):
 
 ```console
 $ uv run fastapi dev main.py --host 0.0.0.0
@@ -143,7 +217,7 @@ $ uv run fastapi dev main.py --host 0.0.0.0
     server   Documentation at http://0.0.0.0:8000/docs             
 ```
 
-To check that it works, we can try to access `localhost:8000/health` in our browser, or use the terminal:
+We can then try to access `localhost:8000/health` in our browser, or via the terminal:
 
 ```console
 $ curl -i localhost:8000/health
@@ -156,7 +230,7 @@ content-type: application/json
 {"message":"OK"}
 ```
 
-All good! We can now build actual functionality into our application.
+Great! We can now build actual functionality into our application.
 
 We start by setting up an `Agent`, as per the PydanticAI syntax, with a simple system prompt that will give us the results we want.
 
@@ -164,22 +238,20 @@ We start by setting up an `Agent`, as per the PydanticAI syntax, with a simple s
 agent = Agent(
     "openai:gpt-5-mini",
     system_prompt="""
-You are a wise AI whose job is it to provide motivational quotes to users on demand.
-
-Only reply with a single quote and nothing else.
-""")
+        You are a wise assistant whose job is it to provide motivational and aspirational quotes to users on demand.
+        Only reply with a single quote and nothing else.
+    """,
+)
 ```
 
-Then, we will make a simple function that will query the OpenAI API synchronously:
+Then, our cached function that will query the OpenAI API synchronously, as per our previously defined strategy:
 
 ```python
-@lru_cache(maxsize=1)
+@lru_cache
 def _query_api(_timestamp: datetime.datetime):
-    result = agent.run_sync("Please motivate me.")
+    result = agent.run_sync()
     return result.output
 ```
-
-This `@lru_cache` business is to make sure that we only generate at most, one single quote, for each timestamp.
 
 The route that calls this function will first round the current time to the nearest 30-minute increment, so that we only query the API once every thirty minutes.
 
@@ -202,9 +274,12 @@ And on our phone:
 
 ![](/static/assets/motivate.webp)
 
+## Conclusion
 
-## To go further...
+We've seen how we can use Tailscale to access applications running locally to our other devices regardless of the network they're connected to. This is really just scratching the surface of what Tailscale can allow us to do. For example, you may have noticed a device called `vps` on my list above. This is because my Virtual Private Server ("VPS") which is infrastructure owned by [Hetzner](https://www.hetzner.com/) is also part of my tailnet.
 
-In Python, we use virtual environments to make sure that our multiple projects do not run into dependency conflicts. When it comes to running applications on a machine, it often makes sense to **containerize** said application, to avoid running into conflicts on the machine running these applications (usually referred to as "the host").
+This means I can have private applications that are also available 24/7 (which would not be possible for apps running off my laptop, as shutting it down would also shut them down). Of course this requires a deployment step to have these applications running on the server, but this can be done quite easily using [Docker](https://www.docker.com/) and [Coolify](https://coolify.io/).
 
-To make managing applications easier, we use [Docker](https://www.docker.com/), which allows us to define the process needed for building our application environment in a declarative way, and then spin up or down the "container" running the application.
+The beauty of this approach is that it removes the friction between having an idea and actually using it in your daily life. Instead of your personal apps languishing as localhost demos that you never actually use, Tailscale lets you turn your weekend coding projects into tools that genuinely bring value. It could be as simple as a motivational quote generator you check each morning, or a personal dashboard for tracking habits, or a simple API that helps automate something tedious, the path from "wouldn't it be cool if..." to "I use this every day" becomes much shorter.
+
+In an era where AI makes building the app easier than ever, Tailscale makes deploying it for yourself just as simple.
