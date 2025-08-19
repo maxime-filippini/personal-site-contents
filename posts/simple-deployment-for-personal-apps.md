@@ -1,10 +1,10 @@
 ---
 title: Easy deployment for personal apps
-posted_on: 2025-08-19
-last_update: 2025-08-19
-draft: true
+posted_on: 2025-08-20
+last_update: 2025-08-20
+draft: false
 abstract: >
-    Test 
+    Building personal apps is easier than ever, but sharing them safely is still fiddly. This post shows how to use Tailscale, a mesh VPN—to securely reach a local app from your phone or a small circle of people without public hosting, auth flows, or firewall wrangling. We set up a tailnet and DNS, build a tiny FastAPI + PydanticAI service that generates a fresh motivational quote every 30 minutes, and access it from anywhere. We wrap up with notes on containerizing the app with Docker for clean, repeatable runs.
 ---
 
 I believe it's fair to say that it's never been this easy to build "personal web applications", i.e. applications where you and your loved ones are the primary user. With the advent of [Vibe coding](https://en.wikipedia.org/wiki/Vibe_coding) and  AI-powered coding agents like [Claude Code](https://www.anthropic.com/claude-code), [OpenCode](https://opencode.ai/) and [OpenAI Codex](https://openai.com/codex/), you can go from idea to a reasonably functional application much faster than could be possible even a couple of years ago.
