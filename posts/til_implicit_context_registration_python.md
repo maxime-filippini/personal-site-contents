@@ -2,7 +2,7 @@
 title: TIL - An implicit context registration pattern in Python
 posted_on: 2025-08-23
 last_update: 2025-08-23
-draft: true
+draft: false
 abstract: >
     A neat pattern in Python: using context managers and a stack to implicitly register objects to their parent—without explicit wiring.
 ---
