@@ -67,7 +67,7 @@ dash = (
 )
 ```
 
-This can however may become difficult to read and could require quite a bit of set up, especially if the table and graph definitions span multiple lines.
+This can however become difficult to read and could require quite a few intermediate variables to set it up, especially if the table and graph definitions span multiple lines.
 
 ## The implicit registration pattern
 
