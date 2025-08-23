@@ -69,7 +69,7 @@ dash = (
 
 This can however may become difficult to read and could require quite a bit of set up, especially if the table and graph definitions span multiple lines.
 
-## The implicit registration
+## The implicit registration pattern
 
 There is a third way you may be interested in if you're not afraid of adding a bit of a magic in your API.
 
@@ -135,7 +135,6 @@ class Graph:
         if Dashboard.instances:
             parent = Dashboard.instances[-1]
             parent.graphs.append(self)
-
 ```
 
 Upon entering the [context manager](https://peps.python.org/pep-0343/), the `__enter__` method is called, and the dashboard instance is pushed on the `Dashboard.instances` stack.
@@ -168,7 +167,6 @@ class Dashboard:
 And now we can write things like:
 
 ```python
-
 with Dashboard() as dash:
     table = Table(pl.read_csv("..."), label="Base table")
     other_table = Table(table.df.pipe(some_func), label="Derived table")
