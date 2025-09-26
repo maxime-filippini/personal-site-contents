@@ -2,7 +2,7 @@
 title: Building a simple type-safe DAG library in TypeScript
 posted_on: 2025-09-26
 last_update: 2025-09-26
-draft: true
+draft: false
 abstract: >
     TypeScript’s type system can do much more than catch mistakes. It can guide users toward valid code. In this post, I illustrate some of TypeScript's power by building a tiny Directed Acyclic Graph ("DAG") library that is type-safe by construction.
 ---
